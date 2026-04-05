@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "Flipper",
+    "slug": "flipper-resale",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.flipper.resale",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Flipper needs camera access to scan items.",
+        "NSPhotoLibraryUsageDescription": "Flipper needs photo library access."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0A0F"
+      },
+      "package": "com.flipper.resale",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Flipper needs camera access to scan items."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Flipper needs photo access."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "917a0d12-be09-4415-aef0-71236177615d"
+      }
+    }
+  }
+}

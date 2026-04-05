@@ -1,0 +1,31 @@
+# dependencies
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+frontend-web/node_modules/
+
+# env files
+.env
+.env.*
+frontend/.expo/
+.expo/
+
+# logs
+*.log
+
+# build outputs
+dist/
+build/
+.next/
+
+# temp/uploads
+uploads/
+tmp/
+
+# system junk
+.DS_Store
+Thumbs.db
+
+# archives
+*.zip
+frontend/android/app/debug.keystore
