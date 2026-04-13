@@ -1,19 +1,40 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
+import HomeScreen from './screens/HomeScreen'
 import CameraScreen from './screens/CameraScreen'
 import PreviewScreen from './screens/PreviewScreen'
 import ResultScreen from './screens/ResultScreen'
 import LotScreen from './screens/LotScreen'
 
 export default function App() {
-  const [screen, setScreen] = useState('camera')
+  const [screen, setScreen] = useState('home')
   const [imageData, setImageData] = useState(null)
   const [analysisResult, setAnalysisResult] = useState(null)
   const [lot, setLot] = useState([])
 
+  useEffect(() => {
+    const currentState = window.history.state
+
+    if (!currentState || !currentState.screen) {
+      window.history.replaceState({ screen: 'home' }, '', window.location.pathname)
+    } else if (currentState.screen) {
+      setScreen(currentState.screen)
+    }
+
+    const onPopState = (event) => {
+      const nextScreen = event.state?.screen || 'home'
+      setScreen(nextScreen)
+    }
+
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
   const navigate = (to, params = {}) => {
     if (params.imageData) setImageData(params.imageData)
     if (params.result) setAnalysisResult(params.result)
+
     setScreen(to)
+    window.history.pushState({ screen: to }, '', window.location.pathname)
   }
 
   const addToLot = (item) => {
@@ -26,6 +47,11 @@ export default function App() {
 
   return (
     <div style={{ height: '100vh', overflow: 'hidden', position: 'relative' }}>
+      {screen === 'home' && (
+        <>
+          <HomeScreen navigate={navigate} lotCount={lot.length} />
+        </>
+      )}
       {screen === 'camera' && (
         <CameraScreen navigate={navigate} lotCount={lot.length} />
       )}
@@ -33,10 +59,19 @@ export default function App() {
         <PreviewScreen navigate={navigate} imageData={imageData} />
       )}
       {screen === 'result' && (
-        <ResultScreen navigate={navigate} imageData={imageData} result={analysisResult} addToLot={addToLot} />
+        <ResultScreen
+          navigate={navigate}
+          imageData={imageData}
+          result={analysisResult}
+          addToLot={addToLot}
+        />
       )}
       {screen === 'lot' && (
-        <LotScreen navigate={navigate} lot={lot} removeFromLot={removeFromLot} />
+        <LotScreen
+          navigate={navigate}
+          lot={lot}
+          removeFromLot={removeFromLot}
+        />
       )}
     </div>
   )

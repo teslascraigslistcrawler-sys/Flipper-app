@@ -1,0 +1,36 @@
+const express = require('express');
+const router = express.Router();
+const upload = require('../middleware/upload');
+const { analyzeImageWithVision } = require('../services/visionService');
+const { parseVisionResponse } = require('../services/itemAnalysisService');
+
+router.post('/analyze-item-image', upload.single('image'), async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        error: 'No image file provided. Send as multipart/form-data with key "image".'
+      });
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY;
+
+    if (!apiKey) {
+      return res.status(500).json({
+        error: 'OPENAI_API_KEY is not configured on the backend.'
+      });
+    }
+
+    const visionResponse = await analyzeImageWithVision(req.file.buffer);
+    const result = parseVisionResponse(visionResponse);
+
+    return res.json(result);
+  } catch (err) {
+    console.error('[analyze-item-image]', err.message);
+    return res.status(500).json({
+      error: 'Image analysis failed.',
+      details: err.message
+    });
+  }
+});
+
+module.exports = router;

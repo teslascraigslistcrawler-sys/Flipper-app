@@ -1,21 +1,38 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { analyzeImage } from '../services/api'
+import { saveImageData, saveResult, clearScanStorage } from '../utils/scanStorage'
 
 export default function PreviewScreen({ navigate, imageData }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
+  useEffect(() => {
+    if (imageData?.url) {
+      saveImageData(imageData.url)
+    }
+  }, [imageData])
+
   const analyze = async () => {
     setLoading(true)
     setError(null)
     try {
+      if (imageData?.url) {
+        saveImageData(imageData.url)
+      }
+
       const result = await analyzeImage(imageData.blob)
+      saveResult(result)
       navigate('result', { result })
     } catch (e) {
       setError(e.message)
     } finally {
       setLoading(false)
     }
+  }
+
+  const retakePhoto = () => {
+    clearScanStorage()
+    navigate('camera')
   }
 
   return (
@@ -42,7 +59,7 @@ export default function PreviewScreen({ navigate, imageData }) {
         <button style={s.analyzeBtn} onClick={analyze} disabled={loading}>
           {loading ? 'Analyzing...' : '🔍 Analyze Item'}
         </button>
-        <button style={s.retakeBtn} onClick={() => navigate('camera')} disabled={loading}>
+        <button style={s.retakeBtn} onClick={retakePhoto} disabled={loading}>
           Retake Photo
         </button>
       </div>

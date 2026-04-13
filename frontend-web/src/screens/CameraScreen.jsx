@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react'
+import { saveImageData, clearScanStorage } from '../utils/scanStorage'
 
 export default function CameraScreen({ navigate, lotCount }) {
   const videoRef = useRef(null)
@@ -30,11 +31,15 @@ export default function CameraScreen({ navigate, lotCount }) {
   const capture = () => {
     const video = videoRef.current
     const canvas = canvasRef.current
+    if (!video || !canvas) return
+
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
     canvas.getContext('2d').drawImage(video, 0, 0)
+
     canvas.toBlob(blob => {
       const url = canvas.toDataURL('image/jpeg', 0.85)
+      saveImageData(url)
       navigate('preview', { imageData: { blob, url } })
     }, 'image/jpeg', 0.85)
   }
@@ -42,8 +47,14 @@ export default function CameraScreen({ navigate, lotCount }) {
   const handleFile = (e) => {
     const file = e.target.files[0]
     if (!file) return
-    const url = URL.createObjectURL(file)
-    navigate('preview', { imageData: { blob: file, url } })
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const url = reader.result
+      saveImageData(url)
+      navigate('preview', { imageData: { blob: file, url } })
+    }
+    reader.readAsDataURL(file)
   }
 
   const flipCamera = () => {
@@ -52,21 +63,28 @@ export default function CameraScreen({ navigate, lotCount }) {
     startCamera(next)
   }
 
+  const goToLot = () => {
+    navigate('lot')
+  }
+
+  const resetAndStay = () => {
+    clearScanStorage()
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
   return (
     <div style={s.container}>
-      {/* Header */}
       <div style={s.header}>
         <div style={s.logoRow}>
           <span style={s.logo}>FLIPPER</span>
           <span style={s.logoTag}>resale intel</span>
         </div>
-        <button style={s.lotBtn} onClick={() => navigate('lot')}>
+        <button style={s.lotBtn} onClick={goToLot}>
           <span>📦</span>
           {lotCount > 0 && <span style={s.badge}>{lotCount}</span>}
         </button>
       </div>
 
-      {/* Camera */}
       {error ? (
         <div style={s.errorBox}>
           <div style={{fontSize:48}}>📷</div>
@@ -78,7 +96,6 @@ export default function CameraScreen({ navigate, lotCount }) {
 
       <canvas ref={canvasRef} style={{display:'none'}} />
 
-      {/* Reticle */}
       <div style={s.reticleWrap}>
         <div style={s.reticle}>
           <div style={{...s.corner, top:0, left:0, borderTop:'3px solid var(--accent)', borderLeft:'3px solid var(--accent)'}} />
@@ -89,7 +106,6 @@ export default function CameraScreen({ navigate, lotCount }) {
         <p style={s.hint}>Center the item in frame</p>
       </div>
 
-      {/* Controls */}
       <div style={s.controls}>
         <button style={s.sideBtn} onClick={() => fileRef.current.click()}>
           <span style={{fontSize:26}}>🖼️</span>
@@ -105,6 +121,25 @@ export default function CameraScreen({ navigate, lotCount }) {
       </div>
 
       <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleFile} />
+
+      <button
+        onClick={resetAndStay}
+        style={{
+          position:'absolute',
+          bottom:12,
+          left:'50%',
+          transform:'translateX(-50%)',
+          background:'rgba(0,0,0,0.45)',
+          color:'var(--text-secondary)',
+          border:'1px solid var(--border)',
+          borderRadius:16,
+          padding:'6px 12px',
+          fontSize:11,
+          cursor:'pointer'
+        }}
+      >
+        Clear Saved Scan
+      </button>
     </div>
   )
 }

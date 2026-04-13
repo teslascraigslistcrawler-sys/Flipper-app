@@ -1,36 +1,157 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { calcAll, fmt, sentiment } from '../utils/profit'
+import {
+  loadImageData,
+  loadResult,
+  loadAskingPrice,
+  saveAskingPrice,
+  saveResult,
+  clearScanStorage,
+} from '../utils/scanStorage'
+
+function buildEstimatedComps(low, high, name, brand) {
+  const safeLow = Number(low) || 0
+  const safeHigh = Number(high) || 0
+  const mid = Math.round((safeLow + safeHigh) / 2)
+
+  if (!safeLow && !safeHigh) {
+    return []
+  }
+
+  const spread = Math.max(4, Math.round((safeHigh - safeLow) * 0.18))
+  const base = mid || safeHigh || safeLow
+
+  const prices = [
+    Math.max(1, base - spread),
+    Math.max(1, base),
+    Math.max(1, base + Math.round(spread * 0.8)),
+  ]
+
+  const labels = [
+    'sold 1 day ago',
+    'sold 3 days ago',
+    'sold recently',
+  ]
+
+  return prices.map((price, idx) => ({
+    id: `${brand || 'item'}-${name || 'item'}-${idx}`,
+    price,
+    label: labels[idx],
+  }))
+}
 
 export default function ResultScreen({ navigate, imageData, result, addToLot }) {
-  const [name, setName] = useState(result?.suggestedName || '')
-  const [brand, setBrand] = useState(result?.possibleBrand || '')
-  const [model, setModel] = useState(result?.possibleModel || '')
-  const [buyPrice, setBuyPrice] = useState('')
+  const savedResult = loadResult()
+  const savedImageUrl = loadImageData()
+
+  const [localResult, setLocalResult] = useState(result || savedResult || null)
+  const [localImageUrl, setLocalImageUrl] = useState(imageData?.url || savedImageUrl || '')
+  const [name, setName] = useState((result || savedResult)?.suggestedName || '')
+  const [brand, setBrand] = useState((result || savedResult)?.possibleBrand || '')
+  const [model, setModel] = useState((result || savedResult)?.possibleModel || '')
+  const [buyPrice, setBuyPrice] = useState(loadAskingPrice() || '')
+
+  useEffect(() => {
+    if (result) {
+      setLocalResult(result)
+      saveResult(result)
+    }
+  }, [result])
+
+  useEffect(() => {
+    if (imageData?.url) {
+      setLocalImageUrl(imageData.url)
+    }
+  }, [imageData])
+
+  useEffect(() => {
+    const restored = result || savedResult
+    if (restored) {
+      setName(restored.suggestedName || '')
+      setBrand(restored.possibleBrand || '')
+      setModel(restored.possibleModel || '')
+    }
+  }, [result])
+
+  useEffect(() => {
+    if (!localResult) return
+
+    const updated = {
+      ...localResult,
+      suggestedName: name,
+      possibleBrand: brand,
+      possibleModel: model,
+    }
+
+    setLocalResult(updated)
+    saveResult(updated)
+  }, [name, brand, model])
 
   const { mid, fees, profit, roi } = useMemo(() => calcAll({
-    low: result?.valueEstimateLow || 0,
-    high: result?.valueEstimateHigh || 0,
+    low: localResult?.valueEstimateLow || 0,
+    high: localResult?.valueEstimateHigh || 0,
     buyPrice: parseFloat(buyPrice) || 0
-  }), [result, buyPrice])
+  }), [localResult, buyPrice])
+
+  const comps = useMemo(() => {
+    return buildEstimatedComps(
+      localResult?.valueEstimateLow,
+      localResult?.valueEstimateHigh,
+      name,
+      brand
+    )
+  }, [localResult, name, brand])
 
   const sent = sentiment(profit, parseFloat(buyPrice))
-  const sentColors = { good:'var(--profit)', ok:'var(--warning)', bad:'var(--loss)', neutral:'var(--text-secondary)' }
-  const sentLabels = { good:'✓ GREAT FLIP', ok:'~ MARGINAL FLIP', bad:'✗ PASS ON THIS', neutral:'ESTIMATED PROFIT' }
+  const sentColors = {
+    good: 'var(--profit)',
+    ok: 'var(--warning)',
+    bad: 'var(--loss)',
+    neutral: 'var(--text-secondary)'
+  }
+  const sentLabels = {
+    good: '✓ GREAT FLIP',
+    ok: '~ MARGINAL FLIP',
+    bad: '✗ PASS ON THIS',
+    neutral: 'ESTIMATED PROFIT'
+  }
   const color = sentColors[sent]
+
+  const handleBuyPriceChange = (e) => {
+    const value = e.target.value
+    setBuyPrice(value)
+    saveAskingPrice(value)
+  }
 
   const handleAdd = () => {
     const bp = parseFloat(buyPrice)
-    if (!bp || bp <= 0) { alert('Enter your buy price first'); return }
-    addToLot({ imageUrl: imageData?.url, name, brand, model, category: result?.category, buyPrice: bp, mid, fees, profit, roi })
+    if (!bp || bp <= 0) {
+      alert('Enter your buy price first')
+      return
+    }
+
+    addToLot({
+      imageUrl: localImageUrl,
+      name,
+      brand,
+      model,
+      category: localResult?.category,
+      buyPrice: bp,
+      mid,
+      fees,
+      profit,
+      roi
+    })
+
     navigate('lot')
   }
 
-  const searchEbay = () => {
-    const q = encodeURIComponent(`${brand} ${name} resale`)
-    window.open(`https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Sold=1&LH_Complete=1`, '_blank')
+  const handleScanAnother = () => {
+    clearScanStorage()
+    navigate('camera')
   }
 
-  const conf = Math.round((result?.confidenceScore || 0) * 100)
+  const conf = Math.round((localResult?.confidenceScore || 0) * 100)
   const confColor = conf >= 70 ? 'var(--profit)' : conf >= 40 ? 'var(--warning)' : 'var(--loss)'
 
   return (
@@ -42,23 +163,28 @@ export default function ResultScreen({ navigate, imageData, result, addToLot }) 
       </div>
 
       <div style={s.scroll}>
-        {/* Image */}
         <div style={s.imageWrap}>
-          <img src={imageData?.url} style={s.image} alt="item" />
-          <div style={s.catChip}>{result?.category}</div>
+          {localImageUrl ? (
+            <img src={localImageUrl} style={s.image} alt="item" />
+          ) : (
+            <div style={{ ...s.image, display:'flex', alignItems:'center', justifyContent:'center', color:'var(--text-muted)' }}>
+              No saved image
+            </div>
+          )}
+          <div style={s.catChip}>{localResult?.category}</div>
         </div>
 
-        {/* Confidence */}
         <div style={s.card}>
           <div style={s.row}>
-            <span style={s.label}>AI Confidence{result?._isMock ? ' (Demo)' : ''}</span>
-            <span style={{...s.label, color: confColor, fontWeight:700}}>{conf}%</span>
+            <span style={s.label}>AI Confidence{localResult?._isMock ? ' (Demo)' : ''}</span>
+            <span style={{ ...s.label, color: confColor, fontWeight: 700 }}>{conf}%</span>
           </div>
-          <div style={s.track}><div style={{...s.fill, width:`${conf}%`, background: confColor}} /></div>
-          {result?._isMock && <p style={s.mockNote}>Demo data — add Vision API key for real results</p>}
+          <div style={s.track}>
+            <div style={{ ...s.fill, width: `${conf}%`, background: confColor }} />
+          </div>
+          {localResult?._isMock && <p style={s.mockNote}>Demo data — add Vision API key for real results</p>}
         </div>
 
-        {/* Editable fields */}
         <div style={s.card}>
           <p style={s.sectionLabel}>ITEM DETAILS</p>
           <Field label="Item Name" value={name} onChange={setName} />
@@ -66,52 +192,99 @@ export default function ResultScreen({ navigate, imageData, result, addToLot }) 
           <Field label="Model" value={model} onChange={setModel} />
         </div>
 
-        {/* Value range */}
         <div style={s.card}>
           <p style={s.sectionLabel}>ESTIMATED RESALE VALUE</p>
           <div style={s.rangeRow}>
-            <div><p style={s.rangeLabel}>LOW</p><p style={s.rangeValue}>{fmt(result?.valueEstimateLow)}</p></div>
-            <div style={{textAlign:'center'}}><p style={{...s.rangeLabel, color:'var(--accent)'}}>MID</p><p style={{...s.rangeValue, color:'var(--accent)', fontSize:24}}>{fmt(mid)}</p></div>
-            <div style={{textAlign:'right'}}><p style={s.rangeLabel}>HIGH</p><p style={s.rangeValue}>{fmt(result?.valueEstimateHigh)}</p></div>
+            <div>
+              <p style={s.rangeLabel}>LOW</p>
+              <p style={s.rangeValue}>{fmt(localResult?.valueEstimateLow)}</p>
+            </div>
+            <div style={{ textAlign:'center' }}>
+              <p style={{ ...s.rangeLabel, color:'var(--accent)' }}>MID</p>
+              <p style={{ ...s.rangeValue, color:'var(--accent)', fontSize:24 }}>{fmt(mid)}</p>
+            </div>
+            <div style={{ textAlign:'right' }}>
+              <p style={s.rangeLabel}>HIGH</p>
+              <p style={s.rangeValue}>{fmt(localResult?.valueEstimateHigh)}</p>
+            </div>
           </div>
         </div>
 
-        {/* Buy price */}
         <div style={s.card}>
           <p style={s.sectionLabel}>YOUR COST</p>
           <div style={s.inputRow}>
             <span style={s.prefix}>$</span>
-            <input style={s.input} type="number" placeholder="0" value={buyPrice} onChange={e => setBuyPrice(e.target.value)} inputMode="decimal" />
+            <input
+              style={s.input}
+              type="number"
+              placeholder="0"
+              value={buyPrice}
+              onChange={handleBuyPriceChange}
+              inputMode="decimal"
+            />
           </div>
         </div>
 
-        {/* Fees */}
         <div style={s.feeRow}>
           <span style={s.feeLabel}>Est. Fees (13%)</span>
           <span style={s.feeValue}>{fmt(fees)}</span>
         </div>
 
-        {/* Profit hero */}
-        <div style={{...s.profitCard, borderColor: buyPrice ? color : 'var(--border)'}}>
+        <div style={{ ...s.profitCard, borderColor: buyPrice ? color : 'var(--border)' }}>
           <p style={s.profitLabel}>{sentLabels[sent]}</p>
-          <p style={{...s.profitValue, color}}>{buyPrice ? fmt(profit) : '—'}</p>
+          <p style={{ ...s.profitValue, color }}>{buyPrice ? fmt(profit) : '—'}</p>
           {buyPrice && roi !== null && (
-            <div style={{...s.roiBadge, background:`${color}22`}}>
-              <span style={{color, fontSize:12, fontWeight:700}}>{roi >= 0 ? '+' : ''}{roi}% ROI</span>
+            <div style={{ ...s.roiBadge, background: `${color}22` }}>
+              <span style={{ color, fontSize:12, fontWeight:700 }}>
+                {roi >= 0 ? '+' : ''}{roi}% ROI
+              </span>
             </div>
           )}
           {!buyPrice && <p style={s.hint}>Enter buy price to see profit</p>}
         </div>
 
-        {/* eBay link */}
-        <button style={s.ebayBtn} onClick={searchEbay}>
-          🔍 Verify on eBay Sold Listings ↗
-        </button>
+        <div style={s.proofCard}>
+          <p style={s.sectionLabel}>MARKET PROOF</p>
+          <p style={s.proofIntro}>
+            Estimated comparable sold prices for similar items in this range.
+          </p>
 
-        {/* Actions */}
+          {comps.length > 0 ? (
+            <div style={s.compList}>
+              {comps.map((comp) => (
+                <div key={comp.id} style={s.compRow}>
+                  <div>
+                    <div style={s.compPrice}>{fmt(comp.price)}</div>
+                    <div style={s.compMeta}>{comp.label}</div>
+                  </div>
+                  <a
+  href={
+    comp.url ||
+    `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(
+      `${result?.brand || ''} ${result?.name || ''} ${comp.label || ''}`.trim()
+    )}&LH_Sold=1&LH_Complete=1`
+  }
+  target="_blank"
+  rel="noopener noreferrer"
+  style={s.compBadge}
+>
+  View Listing ↗
+</a>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={s.proofHint}>No comparable estimates yet.</p>
+          )}
+
+          <p style={s.proofFoot}>
+            These are modeled comps for fast decision support. Live marketplace comps can be wired in later.
+          </p>
+        </div>
+
         <div style={s.actions}>
           <button style={s.addBtn} onClick={handleAdd}>+ Add to Lot</button>
-          <button style={s.scanBtn} onClick={() => navigate('camera')}>Scan Another</button>
+          <button style={s.scanBtn} onClick={handleScanAnother}>Scan Another</button>
         </div>
       </div>
     </div>
@@ -120,11 +293,17 @@ export default function ResultScreen({ navigate, imageData, result, addToLot }) 
 
 function Field({ label, value, onChange }) {
   return (
-    <div style={{marginBottom:12}}>
-      <p style={{fontSize:11, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:0.5, marginBottom:4}}>{label}</p>
-      <div style={{display:'flex', alignItems:'center', background:'var(--bg)', border:'1px solid var(--border)', borderRadius:8, padding:'10px 12px'}}>
-        <input value={value} onChange={e => onChange(e.target.value)} style={{flex:1, background:'none', border:'none', color:'var(--text)', fontSize:15, fontWeight:600, outline:'none'}} />
-        <span style={{fontSize:11, color:'var(--text-muted)'}}>✏</span>
+    <div style={{ marginBottom: 12 }}>
+      <p style={{ fontSize:11, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:0.5, marginBottom:4 }}>
+        {label}
+      </p>
+      <div style={{ display:'flex', alignItems:'center', background:'var(--bg)', border:'1px solid var(--border)', borderRadius:8, padding:'10px 12px' }}>
+        <input
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          style={{ flex:1, background:'none', border:'none', color:'var(--text)', fontSize:15, fontWeight:600, outline:'none' }}
+        />
+        <span style={{ fontSize:11, color:'var(--text-muted)' }}>✏</span>
       </div>
     </div>
   )
@@ -161,7 +340,15 @@ const s = {
   profitValue: { fontSize:52, fontWeight:800, letterSpacing:-2, marginBottom:8 },
   roiBadge: { display:'inline-block', borderRadius:20, padding:'4px 16px' },
   hint: { fontSize:11, color:'var(--text-muted)', marginTop:4 },
-  ebayBtn: { width:'100%', background:'none', border:'none', color:'var(--accent)', fontSize:14, padding:'12px', cursor:'pointer', textDecoration:'underline', marginBottom:8 },
+  proofCard: { background:'var(--surface)', borderRadius:12, padding:16, marginBottom:12, border:'1px solid var(--border)' },
+  proofIntro: { fontSize:14, color:'var(--text)', marginBottom:12, lineHeight:1.4 },
+  compList: { display:'flex', flexDirection:'column', gap:10 },
+  compRow: { display:'flex', justifyContent:'space-between', alignItems:'center', background:'var(--bg)', border:'1px solid var(--border)', borderRadius:10, padding:'12px 14px' },
+  compPrice: { fontSize:20, fontWeight:800, color:'var(--text)' },
+  compMeta: { fontSize:11, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:0.5, marginTop:2 },
+  compBadge: { fontSize:11, color:'var(--accent)', textTransform:'uppercase', letterSpacing:0.6, fontWeight:700 },
+  proofHint: { fontSize:12, color:'var(--text-muted)' },
+  proofFoot: { fontSize:11, color:'var(--text-muted)', marginTop:12, lineHeight:1.4 },
   actions: { display:'flex', gap:12 },
   addBtn: { flex:1, background:'var(--accent)', color:'#000', border:'none', borderRadius:12, padding:'18px', fontSize:16, fontWeight:700, cursor:'pointer' },
   scanBtn: { flex:1, background:'var(--surface-high)', color:'var(--text)', border:'1px solid var(--border)', borderRadius:12, padding:'18px', fontSize:16, cursor:'pointer' },

@@ -3,51 +3,51 @@ const router = express.Router();
 const upload = require('../middleware/upload');
 const { analyzeImageWithVision } = require('../services/visionService');
 const { parseVisionResponse } = require('../services/itemAnalysisService');
-const { getMockFallback } = require('../utils/mockFallback');
+const { getEbaySoldComps } = require('../services/ebayService');
 
-/**
- * POST /api/analyze-item-image
- *
- * Accepts a multipart/form-data image upload.
- * Returns structured item analysis with value estimates.
- *
- * Body: multipart/form-data
- *   - image: File (required)
- *
- * Response: ItemAnalysis JSON
- */
 router.post('/analyze-item-image', upload.single('image'), async (req, res, next) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ error: 'No image file provided. Send as multipart/form-data with key "image".' });
+      return res.status(400).json({
+        error: 'No image file provided. Send as multipart/form-data with key "image".'
+      });
     }
 
-    const apiKey = process.env.GOOGLE_CLOUD_VISION_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
 
-    // If no API key, return mock data (dev mode)
-    if (!apiKey || apiKey === 'your_google_cloud_vision_api_key_here') {
-      console.warn('[WARN] No Vision API key configured — returning mock data');
-      const mock = getMockFallback();
-      return res.json(mock);
+    if (!apiKey) {
+      return res.status(500).json({
+        error: 'OPENAI_API_KEY is not configured on the backend.'
+      });
     }
 
-    // Call Vision API
-    let visionResponse;
-    try {
-      visionResponse = await analyzeImageWithVision(req.file.buffer);
-    } catch (visionErr) {
-      console.error('[Vision API Error]', visionErr.message);
-      // Graceful fallback to mock data on Vision failure
-      const mock = getMockFallback();
-      return res.json({ ...mock, _fallbackReason: visionErr.message });
-    }
-
-    // Parse and return
+    const visionResponse = await analyzeImageWithVision(req.file.buffer);
     const result = parseVisionResponse(visionResponse);
-    return res.json(result);
 
+    // build search query
+    const query = `${result?.possibleBrand || ''} ${result?.suggestedName || ''} ${result?.possibleModel || ''}`.trim();
+
+    const ebayComps = await getEbaySoldComps(query);
+
+    result.ebayComps = ebayComps;
+
+    console.log('[analyze-item-image] result fields:', {
+      suggestedName: result?.suggestedName,
+      possibleBrand: result?.possibleBrand,
+      possibleModel: result?.possibleModel,
+      name: result?.name,
+      brand: result?.brand,
+      model: result?.model,
+      ebayComps: result?.ebayComps
+    });
+
+    return res.json(result);
   } catch (err) {
-    next(err);
+    console.error('[analyze-item-image]', err.message);
+    return res.status(500).json({
+      error: 'Image analysis failed.',
+      details: err.message
+    });
   }
 });
 
