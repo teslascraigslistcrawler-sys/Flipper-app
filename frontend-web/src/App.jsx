@@ -4,6 +4,7 @@ import CameraScreen from './screens/CameraScreen'
 import PreviewScreen from './screens/PreviewScreen'
 import ResultScreen from './screens/ResultScreen'
 import LotScreen from './screens/LotScreen'
+import ListingStudio from './components/ListingStudio'
 
 export default function App() {
   const [screen, setScreen] = useState('home')
@@ -20,21 +21,25 @@ export default function App() {
       setScreen(currentState.screen)
     }
 
-    const onPopState = (event) => {
-      const nextScreen = event.state?.screen || 'home'
-      setScreen(nextScreen)
+    const handlePopState = (event) => {
+      if (event.state && event.state.screen) {
+        setScreen(event.state.screen)
+      } else {
+        setScreen('home')
+      }
     }
 
-    window.addEventListener('popstate', onPopState)
-    return () => window.removeEventListener('popstate', onPopState)
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
   }, [])
 
-  const navigate = (to, params = {}) => {
-    if (params.imageData) setImageData(params.imageData)
-    if (params.result) setAnalysisResult(params.result)
+  const navigate = (nextScreen, data = {}) => {
+    const state = { screen: nextScreen, ...data }
+    window.history.pushState(state, '', window.location.pathname)
+    setScreen(nextScreen)
 
-    setScreen(to)
-    window.history.pushState({ screen: to }, '', window.location.pathname)
+    if (data.imageData !== undefined) setImageData(data.imageData)
+    if (data.result !== undefined) setAnalysisResult(data.result)
   }
 
   const addToLot = (item) => {
@@ -49,15 +54,33 @@ export default function App() {
     <div style={{ height: '100vh', overflow: 'hidden', position: 'relative' }}>
       {screen === 'home' && (
         <>
+          <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 1000 }}>
+            <button
+              onClick={() => navigate('listingStudio')}
+              style={{
+                padding: '10px 14px',
+                borderRadius: '10px',
+                border: '1px solid #ccc',
+                background: '#fff',
+                cursor: 'pointer',
+                fontWeight: 600
+              }}
+            >
+              Listing Studio
+            </button>
+          </div>
           <HomeScreen navigate={navigate} lotCount={lot.length} />
         </>
       )}
+
       {screen === 'camera' && (
         <CameraScreen navigate={navigate} lotCount={lot.length} />
       )}
+
       {screen === 'preview' && (
         <PreviewScreen navigate={navigate} imageData={imageData} />
       )}
+
       {screen === 'result' && (
         <ResultScreen
           navigate={navigate}
@@ -66,12 +89,36 @@ export default function App() {
           addToLot={addToLot}
         />
       )}
+
       {screen === 'lot' && (
         <LotScreen
           navigate={navigate}
           lot={lot}
           removeFromLot={removeFromLot}
         />
+      )}
+
+      {screen === 'listingStudio' && (
+        <div style={{ height: '100vh', overflowY: 'auto', background: '#f7f7f7' }}>
+          <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '16px' }}>
+            <div style={{ marginBottom: '12px' }}>
+              <button
+                onClick={() => navigate('home')}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  border: '1px solid #ccc',
+                  background: '#fff',
+                  cursor: 'pointer',
+                  fontWeight: 600
+                }}
+              >
+                ← Back Home
+              </button>
+            </div>
+            <ListingStudio />
+          </div>
+        </div>
       )}
     </div>
   )
