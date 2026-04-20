@@ -15,7 +15,7 @@ const {
   buildSmartPricing,
   displayConditionLabel,
   displayPackageLabel,
-} = require('./pricingEngine');
+} = require('./smartPricingEngine');
 
 function cleanText(value) {
   return String(value || '')

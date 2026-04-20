@@ -5,15 +5,15 @@ const {
   CONDITION_TYPES,
   PACKAGE_STATES,
   buildSmartPricing
-} = require('../services/pricingEngine');
+} = require('../services/smartPricingEngine');
 
 const {
   generateEbayDraft
 } = require('../services/ebayTemplateService');
 
 const {
-  fetchBrowseComps
-} = require('../services/ebayBrowseService');
+  fetchBrowseCompsForItem
+} = require('../services/smartBrowseService');
 
 async function getItemById(id) {
   return {
@@ -47,19 +47,19 @@ function buildCompQuery(item) {
 router.post('/pricing/preview', async (req, res) => {
   try {
     const item = req.body.item || {};
-    const query = buildCompQuery(item);
-    const activePrices = await fetchBrowseComps(query);
+    const compData = await fetchBrowseCompsForItem(item);
 
     const pricing = buildSmartPricing(item, {
       soldPrices: [],
-      activePrices
+      activePrices: compData.activePrices
     });
 
     return res.json({
       success: true,
       pricing,
-      compQuery: query,
-      compSampleSize: activePrices.length,
+      queries: compData.queries,
+      listings: compData.listings.slice(0, 12),
+      compSampleSize: compData.activePrices.length,
       enums: {
         conditionTypes: CONDITION_TYPES,
         packageStates: PACKAGE_STATES
@@ -77,12 +77,11 @@ router.post('/pricing/preview', async (req, res) => {
 router.get('/items/:id/pricing', async (req, res) => {
   try {
     const item = await getItemById(req.params.id);
-    const query = buildCompQuery(item);
-    const activePrices = await fetchBrowseComps(query);
+    const compData = await fetchBrowseCompsForItem(item);
 
     item.comps = {
       soldPrices: [],
-      activePrices
+      activePrices: compData.activePrices
     };
 
     const pricing = buildSmartPricing(item, item.comps);
@@ -91,8 +90,9 @@ router.get('/items/:id/pricing', async (req, res) => {
       success: true,
       item,
       pricing,
-      compQuery: query,
-      compSampleSize: activePrices.length
+      queries: compData.queries,
+      listings: compData.listings.slice(0, 12),
+      compSampleSize: compData.activePrices.length
     });
   } catch (error) {
     console.error('items/:id/pricing error:', error.response?.data || error.message || error);
@@ -112,12 +112,11 @@ router.post('/items/:id/generate-ebay-draft', async (req, res) => {
       ...(req.body.item || {})
     };
 
-    const query = buildCompQuery(item);
-    const activePrices = await fetchBrowseComps(query);
+    const compData = await fetchBrowseCompsForItem(item);
 
     item.comps = {
       soldPrices: [],
-      activePrices
+      activePrices: compData.activePrices
     };
 
     const draft = generateEbayDraft(item, req.body.policies || {});
@@ -125,8 +124,9 @@ router.post('/items/:id/generate-ebay-draft', async (req, res) => {
     return res.json({
       success: true,
       draft,
-      compQuery: query,
-      compSampleSize: activePrices.length
+      queries: compData.queries,
+      listings: compData.listings.slice(0, 12),
+      compSampleSize: compData.activePrices.length
     });
   } catch (error) {
     console.error('generate-ebay-draft error:', error.response?.data || error.message || error);
