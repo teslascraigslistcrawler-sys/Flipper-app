@@ -124,17 +124,51 @@ function scoreListing(item, listing) {
   let score = 0;
 
   if (publication && title.includes(publication)) score += 5;
-  if (subject && title.includes(subject)) score += 5;
+
+  if (subject && title.includes(subject)) {
+    score += 6;
+  } else {
+    score -= 4;
+  }
+
   if (title.includes('magazine')) score += 2;
 
   for (const tok of issue.split(' ')) {
     if (tok.length > 2 && title.includes(tok)) score += 1;
   }
 
+  if (issue && title.includes(issue)) {
+    score += 4;
+  } else {
+    score -= 2;
+  }
+
+  // relative low-price penalty (based on realistic floor)
+if (Number(listing.rawPrice) < 15) score -= 5;
+
+// penalize multi-issue / collection listings
+if (
+  title.includes('complete') ||
+  title.includes('collection') ||
+  title.includes('full set') ||
+  title.includes('all issues') ||
+  title.includes('199') || title.includes('200') && !title.includes('2004')
+) {
+  score -= 6;
+}
+
   const junk = ['lot', 'bundle', 'subscription', 'poster', 'framed', 'autograph', 'reprint', 'digital'];
   for (const bad of junk) {
     if (title.includes(bad)) score -= 4;
   }
+
+  // hard penalties for non-comparable listings
+  if (title.includes('also avail')) score -= 6;
+  if (title.includes('1992')) score -= 6;
+  if (title.includes('2017')) score -= 6;
+  if (title.includes('set of')) score -= 6;
+
+  if (Number(listing.rawPrice) < 8) score -= 5;
 
   return score;
 }
@@ -207,7 +241,7 @@ async function fetchBrowseCompsForItem(item) {
   }
 
   listings = dedupeListings(listings)
-    .filter(x => x.score >= 4)
+    .filter(x => x.score >= 8 && x.rawPrice >= 15)
     .sort((a, b) => b.score - a.score);
 
   return {
