@@ -1,3 +1,4 @@
+require("dotenv").config();
 'use strict';
 
 require('dotenv').config();
@@ -12,12 +13,14 @@ const listingDraftRoutes = require('./routes/listingDraft');
 const ebayStatusRoutes = require('./routes/ebayStatus');
 const exportRoutes = require('./routes/export');
 
+const ebayNotificationRoutes = require('./routes/ebayNotification');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors({ origin: process.env.ALLOWED_ORIGIN || '*' }));
 app.use(express.json());
+app.use('/api/ebay', ebayNotificationRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
