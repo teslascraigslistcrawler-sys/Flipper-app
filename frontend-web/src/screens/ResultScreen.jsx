@@ -4,6 +4,7 @@ export default function ResultScreen({ navigate, imageData, result }) {
   const [buyPrice, setBuyPrice] = useState('')
   const [pricing, setPricing] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
     // clear any leftover media (fix ghost video)
@@ -22,11 +23,39 @@ export default function ResultScreen({ navigate, imageData, result }) {
     fetch(`/api/premium/items/${result.id}/pricing`)
       .then(res => res.json())
       .then(data => {
-        setPricing(data.item?.pricing || null)
+        setPricing(data.pricing || data.item?.pricing || null)
       })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [result])
+
+  const refreshPricing = async () => {
+    if (!result) return
+
+    try {
+      setRefreshing(true)
+
+      const res = await fetch('/api/premium/pricing/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          item: {
+            ...(result || {}),
+            purchasePrice: parseFloat(buyPrice) || 0
+          }
+        })
+      })
+
+      const data = await res.json()
+      if (data.success) {
+        setPricing(data.pricing || null)
+      }
+    } catch (err) {
+      console.error('refresh pricing failed', err)
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   const profit = pricing && buyPrice
     ? (pricing.recommendedBIN - parseFloat(buyPrice) - pricing.estimatedFeesAtBIN).toFixed(2)
